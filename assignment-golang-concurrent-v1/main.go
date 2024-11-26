@@ -95,18 +95,18 @@ func (sm *InMemoryStudentManager) Register(id string, name string, studyProgram 
 
 	// Validate input fields
 	if strings.TrimSpace(id) == "" || strings.TrimSpace(name) == "" || strings.TrimSpace(studyProgram) == "" {
-		return "", fmt.Errorf("all fields must be filled")
-	}	
+		return "", fmt.Errorf("ID, Name or StudyProgram is undefined!")
+	}
 
 	// Validate study program
 	if _, exists := sm.studentStudyPrograms[studyProgram]; !exists {
-		return "", fmt.Errorf("invalid study program code")
+		return "", fmt.Errorf("Study program %s is not found", studyProgram)
 	}
 
 	// Check if student already exists
 	for _, student := range sm.students {
 		if student.ID == strings.TrimSpace(id) {
-			return "", fmt.Errorf("student already registered")
+			return "", fmt.Errorf("Registrasi gagal: id sudah digunakan")
 		}
 	}
 
@@ -117,7 +117,7 @@ func (sm *InMemoryStudentManager) Register(id string, name string, studyProgram 
 		StudyProgram: strings.TrimSpace(studyProgram),
 	})
 
-	return "Registration successful", nil
+	return fmt.Sprintf("Registrasi berhasil: %s (%s)", name, studyProgram), nil
 }
 
 func (sm *InMemoryStudentManager) Login(id string, name string) (string, error) {
@@ -133,7 +133,9 @@ func (sm *InMemoryStudentManager) Login(id string, name string) (string, error) 
 	for _, student := range sm.students {
 		if student.ID == strings.TrimSpace(id) && student.Name == strings.TrimSpace(name) {
 			sm.failedLoginAttempts[id] = 0 // Reset failed attempts
-			return fmt.Sprintf("Selamat datang %s! Kamu terdaftar di program studi: %s.", student.Name, student.StudyProgram), nil
+			// find studyProgram
+			prodi, _ := sm.studentStudyPrograms[student.StudyProgram]
+			return fmt.Sprintf("Login berhasil: Selamat datang %s! Kamu terdaftar di program studi: %s", student.Name, prodi), nil
 		}
 	}
 
@@ -182,7 +184,7 @@ func (sm *InMemoryStudentManager) ModifyStudent(name string, fn model.StudentMod
 			if err != nil {
 				return "", fmt.Errorf("gagal memodifikasi mahasiswa: %v", err)
 			}
-			return "Data mahasiswa berhasil dimodifikasi", nil
+			return "Program studi mahasiswa berhasil diubah.", nil
 		}
 	}
 	return "", fmt.Errorf("mahasiswa dengan nama %s tidak ditemukan", name)
@@ -198,17 +200,23 @@ func (sm *InMemoryStudentManager) ChangeStudyProgram(programStudi string) model.
 	}
 }
 
+func (sm *InMemoryStudentManager) SubmitAssignmentLongProcess() {
+	// 3000ms delay to simulate slow processing
+	time.Sleep(30 * time.Millisecond)
+}
+
 func (sm *InMemoryStudentManager) SubmitAssignments(total int) {
 	tasks := make(chan int, total)
-	results := make(chan string, total)
 
+	var wg sync.WaitGroup
 	for i := 1; i <= 3; i++ {
-		go func(workerID int) {
-			for task := range tasks {
-				time.Sleep(3 * time.Second) // Simulate long process
-				results <- fmt.Sprintf("Worker %d: Finished assignment %d", workerID, task)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range tasks {
+				sm.SubmitAssignmentLongProcess()
 			}
-		}(i)
+		}()
 	}
 
 	for i := 1; i <= total; i++ {
@@ -216,9 +224,7 @@ func (sm *InMemoryStudentManager) SubmitAssignments(total int) {
 	}
 	close(tasks)
 
-	for i := 1; i <= total; i++ {
-		fmt.Println(<-results)
-	}
+	wg.Wait()
 }
 
 func main() {
